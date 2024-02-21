@@ -1,0 +1,54 @@
+[gd_scene load_steps=4 format=3 uid="uid://bs3ikmi6kdglk"]
+
+[ext_resource type="Script" uid="uid://dt0b70vfux528" path="res://main_tile_set.tres" id="1_yditt"]
+[ext_resource type="TileSet" uid="uid://dt0b70vfux528" path="res://main_tile_set.tres" id="2_ilgdk"]
+[ext_resource type="Texture2D" uid="uid://df2ew8icvl7p4" path="res://player.png" id="7_edn0m"]
+
+[node name="Game" type="Node2D"]
+script = ExtResource("1_yditt")
+
+[node name="TileMap" type="TileMap" parent="."]
+tile_set = ExtResource("2_ilgdk")
+rendering_quadrant_size = 32
+format = 2
+
+[node name="Player" type="Sprite2D" parent="."]
+position = Vector2(288, 160)
+texture = ExtResource("7_edn0m")
+centered = false
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+position = Vector2(16, 16)
+drag_left_margin = 0.0
+drag_top_margin = 0.0
+drag_right_margin = 0.0
+drag_bottom_margin = 0.0
+
+[node name="UiLayer" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="ColorRect" type="ColorRect" parent="UiLayer"]
+offset_right = 640.0
+offset_bottom = 35.0
+color = Color(0, 0, 0, 1)
+
+[node name="Level" type="Label" parent="UiLayer"]
+offset_left = 21.0
+offset_right = 106.0
+offset_bottom = 35.0
+text = "Level:"
+vertical_alignment = 1
+
+[node name="Health" type="Label" parent="UiLayer"]
+offset_left = 176.0
+offset_right = 261.0
+offset_bottom = 35.0
+text = "Health:"
+vertical_alignment = 1
+
+[node name="Score" type="Label" parent="UiLayer"]
+offset_left = 373.0
+offset_right = 458.0
+offset_bottom = 35.0
+text = "Score:"
+vertical_alignment = 1

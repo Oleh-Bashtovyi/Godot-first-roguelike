@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "Roguelike_game": {
+      "commandName": "Project"
+    },
+    "Run with Godot": {
+      "commandName": "Executable",
+      "executablePath": "E:\\Programs\\Godot_v4.2.1-stable_mono_win64\\Godot_v4.2.1-stable_mono_win64.exe",
+      "commandLineArgs": "--path . --verbose",
+      "workingDirectory": ".",
+      "nativeDebugging": true
+    }
+  }
+}
