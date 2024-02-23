@@ -6,12 +6,12 @@ public partial class game : Node2D
 {
 	public enum TileType
 	{
-		black = 0,
-		stone = 1,
-		wall = 2,
-		floor = 3,
-		stairs = 4,
-		door = 5
+		Black = 0,
+		Stone = 1,
+		Wall = 2,
+		Floor = 3,
+		Stairs = 4,
+		Door = 5
 	}
 
     //==============================================================
@@ -81,9 +81,137 @@ public partial class game : Node2D
 			Map.Add(new());
 			for (int y = 0; y < levelSize.Y; y++)
 			{
-				Map[x].Add(TileType.stone);
-				_TileMap.SetCell(0, new Vector2I(x, y), (int)TileType.stone, new Vector2I(0, 0));
+				//SetTile(x, y, TileType.Stone);
+				Map[x].Add(TileType.Stone);
+				_TileMap.SetCell(0, new Vector2I(x, y), (int)TileType.Stone, new Vector2I(0, 0));
 			}
 		}
+
+		var freeRegions = new List<Rect2>() { new Rect2(new Vector2(2, 2), levelSize - new Vector2(4, 4)) };
+		var numberOfRoom = LEVEL_ROOMS_COUNT[current_level_number];
+
+		for (int i = 0; i < numberOfRoom; i++)
+		{
+			AddRoom(freeRegions);
+
+			if (freeRegions.Count == 0)
+			{
+				break;
+			}
+		}
+
 	}
+
+
+	private void AddRoom(List<Rect2> freeRegions)
+	{
+		var rand = new Random();
+		var region = freeRegions[rand.Next() % freeRegions.Count];
+
+		var sizeX = MIN_ROOM_DIMENSION;
+		if( region.Size.X > MIN_ROOM_DIMENSION )
+		{
+			sizeX += rand.Next() % ((int)(region.Size.X - MIN_ROOM_DIMENSION));
+		}
+
+        var sizeY = MIN_ROOM_DIMENSION;
+        if (region.Size.Y > MIN_ROOM_DIMENSION)
+        {
+            sizeY += rand.Next() % ((int)(region.Size.Y - MIN_ROOM_DIMENSION));
+        }
+
+		sizeX = Math.Min(sizeX, MAX_ROOM_DIMENSION);
+		sizeY = Math.Min(sizeY, MAX_ROOM_DIMENSION);
+
+		var startX = region.Position.X;
+		if(region.Size.X > sizeX )
+		{
+			startX += rand.Next() % ((int)(region.Size.X - sizeX));
+		}
+
+        var startY = region.Position.Y;
+        if (region.Size.Y > sizeY)
+        {
+            startY += rand.Next() % ((int)(region.Size.Y - sizeY));
+        }
+
+		var room = new Rect2(startX, startY, sizeX, sizeY);
+		Rooms.Add(room);
+
+		for (int x = (int)startX; x < startX + sizeX; x++)
+		{
+			SetTile(x, (int)startY, TileType.Wall);
+			SetTile(x, (int)(startY + sizeY - 1), TileType.Wall);
+		}
+
+		for (int y = (int)(startY + 1); y < startY + sizeY - 1; y++)
+		{
+			SetTile((int)startX, y, TileType.Wall);
+			SetTile((int)(startX + sizeX - 1), y, TileType.Wall);
+
+			for (int x = (int)(startX + 1); x < (startX + sizeX - 1); x++)
+			{
+				SetTile(x, y, TileType.Floor);
+			}
+		}
+
+		CutRegions(freeRegions, room);
+    }
+
+
+
+	private void CutRegions(List<Rect2> freeRegions, Rect2 regionToRemove)
+	{
+		var removalQueue = new List<Rect2>();
+		var additionQueue = new List<Rect2>();
+
+		foreach (var region in freeRegions)
+		{
+			if (region.Intersects(regionToRemove))
+			{
+				removalQueue.Add(region);
+
+				var leftover_left = regionToRemove.Position.X - region.Position.X - 1;
+				var leftover_right = region.End.X - regionToRemove.End.X - 1;
+				var leftover_above = regionToRemove.Position.Y - region.Position.Y - 1;
+				var leftover_below = region.End.Y - regionToRemove.End.Y - 1;
+
+				if(leftover_left >= MIN_ROOM_DIMENSION)
+				{
+					additionQueue.Add(new Rect2(region.Position, new Vector2(leftover_left, region.Size.Y)));
+				}
+				if(leftover_right >= MIN_ROOM_DIMENSION)
+				{
+					additionQueue.Add(new Rect2(new Vector2(regionToRemove.End.X + 1, region.Position.Y), 
+													 new Vector2(leftover_right, region.Size.Y)));
+				}
+                if (leftover_above >= MIN_ROOM_DIMENSION)
+                {
+                    additionQueue.Add(new Rect2(region.Position, new Vector2(region.Size.X, leftover_above)));
+                }
+                if (leftover_below >= MIN_ROOM_DIMENSION)
+                {
+                    additionQueue.Add(new Rect2(new Vector2(region.Position.X, regionToRemove.End.Y + 1),
+                                                     new Vector2(region.Size.X, leftover_below)));
+                }
+
+            }
+		}
+		foreach(var item in removalQueue)
+		{
+			freeRegions.Remove(item);
+		}
+
+		foreach(var region in additionQueue)
+		{
+			freeRegions.Add(region);
+		}
+	}
+
+
+	private void SetTile(int x, int y, TileType tileType)
+	{
+		Map[x][y] = tileType;
+        _TileMap.SetCell(0, new Vector2I(x, y), (int)tileType, new Vector2I(0, 0));
+    }
 }
