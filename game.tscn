@@ -1,11 +1,11 @@
 [gd_scene load_steps=4 format=3 uid="uid://bs3ikmi6kdglk"]
 
-[ext_resource type="Script" uid="uid://dt0b70vfux528" path="res://main_tile_set.tres" id="1_yditt"]
+[ext_resource type="Script" path="res://game.cs" id="1_4al0r"]
 [ext_resource type="TileSet" uid="uid://dt0b70vfux528" path="res://main_tile_set.tres" id="2_ilgdk"]
 [ext_resource type="Texture2D" uid="uid://df2ew8icvl7p4" path="res://player.png" id="7_edn0m"]
 
 [node name="Game" type="Node2D"]
-script = ExtResource("1_yditt")
+script = ExtResource("1_4al0r")
 
 [node name="TileMap" type="TileMap" parent="."]
 tile_set = ExtResource("2_ilgdk")
