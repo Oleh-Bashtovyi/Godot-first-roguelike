@@ -24,13 +24,14 @@ public partial class game : Node2D
 
 	public Vector2[] LEVEL_SIZES = 
 	{
+		new (20 , 20),
+		new (25 , 25),
 		new (30 , 30),
-		new (35 , 35),
-		new (40 , 40),
-		new (45 , 45),
-		new (50 , 50),
+		//new (35 , 35),
+		//new (40 , 40),
 	};
-	public int[] LEVEL_ROOMS_COUNT = { 5, 7, 9, 12, 15 }; 
+	public int[] LEVEL_ROOMS_COUNT { get; } = { 2, 2, 2 }; 
+	//public int[] LEVEL_ROOMS_COUNT = { 9, 13, 14, 16, 18 }; 
 
 	//==============================================================
 	//CURRENT LEVEL
@@ -52,7 +53,7 @@ public partial class game : Node2D
 	//==============================================================
 	private Sprite2D _player;
 	private TileMap _TileMap;
-
+	private ColorRect _winScreen;
 
     // Called when the node enters the scene tree for the first time.
     public override void _Ready()
@@ -61,6 +62,7 @@ public partial class game : Node2D
 		DisplayServer.WindowSetSize(new Vector2I(1920, 1080));
 		_player = this.GetNode<Sprite2D>(new NodePath("Player"));
 		_TileMap = this.GetNode<TileMap>(new NodePath("TileMap"));
+		_winScreen = this.GetNode<ColorRect>("UiLayer/Win");
 		BuildLevel();
 	}
 
@@ -75,25 +77,36 @@ public partial class game : Node2D
 		if (!@event.IsPressed())
 			return;
 
-		if (@event.IsAction("Left") || @event.IsAction("a"))
+		if (@event.IsAction("Left") || @event.IsAction("A"))
 		{
 			TryMove(-1, 0);
 		}
-        else if (@event.IsAction("Right") || @event.IsAction("d"))
+        else if (@event.IsAction("Right") || @event.IsAction("D"))
         {
             TryMove(1, 0);
         }
-        else if (@event.IsAction("Up") || @event.IsAction("w"))
+        else if (@event.IsAction("Up") || @event.IsAction("W"))
         {
             TryMove(0, -1);
         }
-        else if (@event.IsAction("Down") || @event.IsAction("s"))
+        else if (@event.IsAction("Down") || @event.IsAction("S"))
         {
             TryMove(0, 1);
         }
     }
 
 	
+
+	private void _on_restart_pressed()
+	{
+        _winScreen.Visible = false;
+		current_level_number = 0;
+		Score = 0;
+		BuildLevel();
+
+    }
+
+
 	private void TryMove(int dx, int dy)
 	{
 		var x = (int)PlayerTile.X + dx;
@@ -111,6 +124,19 @@ public partial class game : Node2D
 				PlayerTile = new Vector2(x, y); break;
 			case TileType.Door:
 				SetTile(x, y, TileType.Floor); break;
+			case TileType.Stairs:
+				current_level_number++;
+				Score += 20;
+				if (current_level_number < LEVEL_SIZES.Length)
+				{
+					BuildLevel();
+				}
+				else
+				{
+					Score += 1000;
+					_winScreen.Visible = true;
+				}
+				break;
 		}
 		UpdateVisuals();
 	}
@@ -157,14 +183,19 @@ public partial class game : Node2D
 		var playerY = startRoom.Position.Y + 1 + random.Next() % ((int)(startRoom.Size.Y - 2));
 		PlayerTile = new Vector2(playerX, playerY);
 		UpdateVisuals();
-	}
 
+		//place ladder
+		var endRoom = Rooms.Last();
+        var ladderX = endRoom.Position.X + 1 + random.Next() % ((int)(endRoom.Size.X - 2));
+        var ladderY = endRoom.Position.Y + 1 + random.Next() % ((int)(endRoom.Size.Y - 2));
+		SetTile((int)ladderX, (int)ladderY, TileType.Stairs);
+		var levelLabel = GetNode<Label>("UiLayer/Level");
+		levelLabel.Text = $"Level: {current_level_number + 1}";
+	}
 	private void UpdateVisuals()
 	{
 		_player.Position = PlayerTile * TILE_SIZE;
 	}
-
-
 	private void ConnectRooms()
 	{
 		var stoneGraph = new AStar2D();
@@ -213,8 +244,6 @@ public partial class game : Node2D
 			AddRandomConnection(stoneGraph, roomGraph);
 		}
 	}
-
-
 	private bool IsEverythingConnected(AStar2D roomGraph)  
 	{
 		var points = roomGraph.GetPointIds();
@@ -236,7 +265,6 @@ public partial class game : Node2D
 
 		return true;
 	}
-
 	private void AddRandomConnection(AStar2D stoneGraph, AStar2D roomGraph)
 	{
 		var startRoomId = GetLeastConnectedPoint(roomGraph);
@@ -262,8 +290,6 @@ public partial class game : Node2D
 
 		roomGraph.ConnectPoints(startRoomId, endRoomId, true);
 	}
-
-
 	private long GetLeastConnectedPoint(AStar2D roomGraph)
 	{
 		var pointsIds = roomGraph.GetPointIds();
@@ -288,7 +314,6 @@ public partial class game : Node2D
 		var rand = new Random();
 		return tiedForLeast[rand.Next() % tiedForLeast.Count];
 	}
-
 	private long GetNearestUnconectedPoint(AStar2D roomGraph, long targetPoint)
 	{
 		var targetPosition = roomGraph.GetPointPosition(targetPoint);
@@ -324,8 +349,6 @@ public partial class game : Node2D
         var rand = new Random();
         return tiedForNearest[rand.Next() % tiedForNearest.Count];
     }
-
-
 	private Vector2 PickRandomDoorLocation(Rect2 room)
 	{
 		var options = new List<Vector2>();
@@ -347,9 +370,6 @@ public partial class game : Node2D
 		var rand = new Random();
 		return options[rand.Next() % options.Count];
 	}
-
-
-
     private void AddRoom(List<Rect2> freeRegions)
 	{
 		var rand = new Random();
@@ -404,7 +424,6 @@ public partial class game : Node2D
 
 		CutRegions(freeRegions, room);
     }
-
 	private void CutRegions(List<Rect2> freeRegions, Rect2 regionToRemove)
 	{
 		var removalQueue = new List<Rect2>();
@@ -452,8 +471,6 @@ public partial class game : Node2D
 			freeRegions.Add(region);
 		}
 	}
-
-
 	private void SetTile(int x, int y, TileType tileType)
 	{
 		Map[x][y] = tileType;
