@@ -70,8 +70,54 @@ public partial class game : Node2D
 	}
 
 
+    public override void _Input(InputEvent @event)
+    {
+		if (!@event.IsPressed())
+			return;
 
-	private void BuildLevel()
+		if (@event.IsAction("Left") || @event.IsAction("a"))
+		{
+			TryMove(-1, 0);
+		}
+        else if (@event.IsAction("Right") || @event.IsAction("d"))
+        {
+            TryMove(1, 0);
+        }
+        else if (@event.IsAction("Up") || @event.IsAction("w"))
+        {
+            TryMove(0, -1);
+        }
+        else if (@event.IsAction("Down") || @event.IsAction("s"))
+        {
+            TryMove(0, 1);
+        }
+    }
+
+	
+	private void TryMove(int dx, int dy)
+	{
+		var x = (int)PlayerTile.X + dx;
+		var y = (int)PlayerTile.Y + dy;
+		var tileType = TileType.Stone;
+
+		if(x >= 0 && x <= LevelSize.X - 2 && y >= 0 && y <= LevelSize.Y - 2)
+		{
+			tileType = Map[x][y];
+		}
+
+		switch(tileType)
+		{
+			case TileType.Floor:
+				PlayerTile = new Vector2(x, y); break;
+			case TileType.Door:
+				SetTile(x, y, TileType.Floor); break;
+		}
+		UpdateVisuals();
+	}
+
+
+
+    private void BuildLevel()
 	{
 		Rooms.Clear();
 		Map.Clear();
@@ -103,7 +149,21 @@ public partial class game : Node2D
 			}
 		}
 		ConnectRooms();
+
+		//place player
+		var startRoom = Rooms.First();
+		var random = new Random();
+		var playerX = startRoom.Position.X + 1 + random.Next() % ((int)(startRoom.Size.X - 2));
+		var playerY = startRoom.Position.Y + 1 + random.Next() % ((int)(startRoom.Size.Y - 2));
+		PlayerTile = new Vector2(playerX, playerY);
+		UpdateVisuals();
 	}
+
+	private void UpdateVisuals()
+	{
+		_player.Position = PlayerTile * TILE_SIZE;
+	}
+
 
 	private void ConnectRooms()
 	{
@@ -157,8 +217,24 @@ public partial class game : Node2D
 
 	private bool IsEverythingConnected(AStar2D roomGraph)  
 	{
-		var point =  roomGraph.GetPointIds().First();
-		return roomGraph.GetPointConnections(point).Count() == roomGraph.GetPointCount() - 1;
+		var points = roomGraph.GetPointIds();
+        var startPoint =  points.First();
+
+		foreach(var toPoint in points)
+		{
+			if(toPoint == startPoint)
+			{
+				continue;
+			}
+
+			var path = roomGraph.GetPointPath(startPoint, toPoint);
+			if(path == null || path.Length == 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private void AddRandomConnection(AStar2D stoneGraph, AStar2D roomGraph)
@@ -184,7 +260,7 @@ public partial class game : Node2D
 			SetTile((int)position.X, (int)position.Y, TileType.Floor);
 		}
 
-		roomGraph.ConnectPoints(startRoomId, endRoomId);
+		roomGraph.ConnectPoints(startRoomId, endRoomId, true);
 	}
 
 

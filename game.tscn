@@ -13,7 +13,7 @@ rendering_quadrant_size = 32
 format = 2
 
 [node name="Player" type="Sprite2D" parent="."]
-position = Vector2(544, 288)
+position = Vector2(320, 160)
 texture = ExtResource("7_edn0m")
 centered = false
 
@@ -25,12 +25,11 @@ drag_right_margin = 0.0
 drag_bottom_margin = 0.0
 
 [node name="UiLayer" type="CanvasLayer" parent="."]
-visible = false
 
 [node name="ColorRect" type="ColorRect" parent="UiLayer"]
 offset_right = 640.0
 offset_bottom = 35.0
-color = Color(0, 0, 0, 1)
+color = Color(0, 0, 0, 0.827451)
 
 [node name="Level" type="Label" parent="UiLayer"]
 offset_left = 21.0
