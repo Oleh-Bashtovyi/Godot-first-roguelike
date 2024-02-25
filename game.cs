@@ -53,43 +53,55 @@ public partial class game : Node2D
 	//==============================================================
 	private Sprite2D _player;
 	private TileMap _TileMap;
+	private TileMap _visibilityMap;
 	private ColorRect _winScreen;
+	private int TileLayer = 0;
+    protected TileMap VisibilityMap => _visibilityMap ??= this.GetNode<TileMap>(new NodePath("VisibilityMap"));
+
 
     // Called when the node enters the scene tree for the first time.
     public override void _Ready()
 	{
-		//DisplayServer.WindowSetSize(new Vector2I(1280, 720));
-		DisplayServer.WindowSetSize(new Vector2I(1920, 1080));
+		DisplayServer.WindowSetSize(new Vector2I(1280, 720));
+		//DisplayServer.WindowSetSize(new Vector2I(1920, 1080));
 		_player = this.GetNode<Sprite2D>(new NodePath("Player"));
 		_TileMap = this.GetNode<TileMap>(new NodePath("TileMap"));
 		_winScreen = this.GetNode<ColorRect>("UiLayer/Win");
 		BuildLevel();
-	}
+        //CallDeferred(nameof(UpdateVisuals));
+        //UpdateVisuals();
+    }
+
+    private bool visualsUpdated = false;
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-
+    public override void _Process(double delta)
+    {
+        if (!visualsUpdated)
+        {
+            UpdateVisuals();
+            visualsUpdated = true;
+        }
+    }
 
     public override void _Input(InputEvent @event)
     {
 		if (!@event.IsPressed())
 			return;
 
-		if (@event.IsAction("Left") || @event.IsAction("A"))
+		if (@event.IsAction("Left") )
 		{
 			TryMove(-1, 0);
 		}
-        else if (@event.IsAction("Right") || @event.IsAction("D"))
+        else if (@event.IsAction("Right") )
         {
             TryMove(1, 0);
         }
-        else if (@event.IsAction("Up") || @event.IsAction("W"))
+        else if (@event.IsAction("Up"))
         {
             TryMove(0, -1);
         }
-        else if (@event.IsAction("Down") || @event.IsAction("S"))
+        else if (@event.IsAction("Down"))
         {
             TryMove(0, 1);
         }
@@ -103,7 +115,7 @@ public partial class game : Node2D
 		current_level_number = 0;
 		Score = 0;
 		BuildLevel();
-
+        CallDeferred(nameof(UpdateVisuals));
     }
 
 
@@ -130,7 +142,7 @@ public partial class game : Node2D
 				if (current_level_number < LEVEL_SIZES.Length)
 				{
 					BuildLevel();
-				}
+                }
 				else
 				{
 					Score += 1000;
@@ -138,8 +150,9 @@ public partial class game : Node2D
 				}
 				break;
 		}
-		UpdateVisuals();
-	}
+        CallDeferred(nameof(UpdateVisuals));
+		
+    }
 
 
 
@@ -148,6 +161,7 @@ public partial class game : Node2D
 		Rooms.Clear();
 		Map.Clear();
 		_TileMap.Clear();
+		VisibilityMap.Clear();
 
 		LevelSize = LEVEL_SIZES[current_level_number];
 
@@ -156,9 +170,9 @@ public partial class game : Node2D
 			Map.Add(new());
 			for (int y = 0; y < LevelSize.Y; y++)
 			{
-				//SetTile(x, y, TileType.Stone);
 				Map[x].Add(TileType.Stone);
-				_TileMap.SetCell(0, new Vector2I(x, y), (int)TileType.Stone, new Vector2I(0, 0));
+				_TileMap.SetCell(TileLayer, new Vector2I(x, y), (int)TileType.Stone, new Vector2I(0, 0));
+				VisibilityMap.SetCell(TileLayer, new Vector2I(x, y), 0, new Vector2I(0, 0));
 			}
 		}
 
@@ -182,20 +196,64 @@ public partial class game : Node2D
 		var playerX = startRoom.Position.X + 1 + random.Next() % ((int)(startRoom.Size.X - 2));
 		var playerY = startRoom.Position.Y + 1 + random.Next() % ((int)(startRoom.Size.Y - 2));
 		PlayerTile = new Vector2(playerX, playerY);
-		UpdateVisuals();
 
-		//place ladder
-		var endRoom = Rooms.Last();
+        //place ladder
+        var endRoom = Rooms.Last();
         var ladderX = endRoom.Position.X + 1 + random.Next() % ((int)(endRoom.Size.X - 2));
         var ladderY = endRoom.Position.Y + 1 + random.Next() % ((int)(endRoom.Size.Y - 2));
 		SetTile((int)ladderX, (int)ladderY, TileType.Stairs);
 		var levelLabel = GetNode<Label>("UiLayer/Level");
 		levelLabel.Text = $"Level: {current_level_number + 1}";
-	}
+
+    }
+
 	private void UpdateVisuals()
 	{
 		_player.Position = PlayerTile * TILE_SIZE;
+
+		try
+		{
+			var playerCenter = TileToPixelCenter(PlayerTile.X, PlayerTile.Y);
+			var spaceState = _TileMap.GetWorld2D().DirectSpaceState;
+
+            for (int x = 0; x < LevelSize.X; x++)
+			{
+				for (int y = 0; y < LevelSize.Y; y++)
+				{
+                    if ( VisibilityMap.GetCellSourceId(0, new Vector2I(x, y)) == 0)
+					{
+						var xDir = (x < PlayerTile.X) ? 1 : -1;
+						var yDir = (y < PlayerTile.Y) ? 1 : -1;
+						var testPoint = TileToPixelCenter(x, y) + new Vector2(xDir, yDir) * (TILE_SIZE / 2);
+
+                        var parameters = PhysicsRayQueryParameters2D.Create(playerCenter, testPoint);
+                        var occlusion = spaceState.IntersectRay(parameters);
+
+                        if (occlusion == null ||
+							occlusion.Count == 0 ||
+							(occlusion["position"].AsVector2() - testPoint).Length() < 1
+							)
+						{
+							VisibilityMap.SetCell(TileLayer, new Vector2I(x, y), -1);
+						}
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+            Console.WriteLine(ex);
+        }
+
 	}
+
+
+	private Vector2 TileToPixelCenter(float x, float y)
+	{
+		return new Vector2((x + 0.5f) * TILE_SIZE, (y + 0.5f) * TILE_SIZE);
+	}
+
+
 	private void ConnectRooms()
 	{
 		var stoneGraph = new AStar2D();
@@ -474,6 +532,6 @@ public partial class game : Node2D
 	private void SetTile(int x, int y, TileType tileType)
 	{
 		Map[x][y] = tileType;
-        _TileMap.SetCell(0, new Vector2I(x, y), (int)tileType, new Vector2I(0, 0));
+        _TileMap.SetCell(TileLayer, new Vector2I(x, y), (int)tileType, new Vector2I(0, 0));
     }
 }
