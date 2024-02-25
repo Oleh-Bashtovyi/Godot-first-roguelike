@@ -27,11 +27,11 @@ public partial class game : Node2D
 		new (20 , 20),
 		new (25 , 25),
 		new (30 , 30),
-		//new (35 , 35),
-		//new (40 , 40),
+		new (35 , 35),
+		new (40 , 40),
 	};
-	public int[] LEVEL_ROOMS_COUNT { get; } = { 2, 2, 2 }; 
-	//public int[] LEVEL_ROOMS_COUNT = { 9, 13, 14, 16, 18 }; 
+	public int[] LEVEL_ROOMS_COUNT = { 9, 13, 14, 16, 18 }; 
+	public int[] LEVEL_ENEMIES_COUNT = { 5, 8, 12, 18, 24 }; 
 
 	//==============================================================
 	//CURRENT LEVEL
@@ -41,6 +41,7 @@ public partial class game : Node2D
 	public Vector2 RoomSize = new Vector2();
 	public List<Rect2> Rooms = new();
 	public List<List<TileType>> Map = new();
+	public List<Enemy> Enemies = new();
 
     //==============================================================
     //GAME STATE
@@ -54,9 +55,53 @@ public partial class game : Node2D
 	private Sprite2D _player;
 	private TileMap _TileMap;
 	private TileMap _visibilityMap;
+	private Label _scoreLabel;
 	private ColorRect _winScreen;
 	private int TileLayer = 0;
+    public PackedScene EnemyScene = ResourceLoader.Load<PackedScene>("res://Enemy.tscn");
     protected TileMap VisibilityMap => _visibilityMap ??= this.GetNode<TileMap>(new NodePath("VisibilityMap"));
+	protected Label ScoreLabel => _scoreLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Score"));
+
+
+	public class Enemy
+	{
+		public Sprite2D scene { get; set; }
+		public Vector2 TilePosition { get; set; }
+		public int FullHp { get; set; }
+		public int Hp {  get; set; }
+		public bool IsDead => Hp <= 0;
+
+
+		public Enemy(game game, int level, float x, float y)
+		{
+			FullHp = 1 + 2* level;
+			Hp = FullHp;
+			TilePosition = new Vector2(x, y);
+			scene = game.EnemyScene.Instantiate<Sprite2D>();
+			scene.Position = TilePosition * TILE_SIZE;
+			game.AddChild(scene);
+		}
+
+		public void TakeDamage(int amount, game game)
+		{
+			if(IsDead) return;
+
+			Hp = Math.Max(0, Hp - amount);
+			var rect = scene.GetNode<ColorRect>("HealthBar");
+			rect.SetSize(new Vector2(TILE_SIZE * ((float)Hp / FullHp), rect.Size.Y));
+
+			game.Score += 10 * FullHp;
+		}
+
+
+		public void Remove()
+		{
+			scene.QueueFree();
+		}
+	}
+
+
+
 
 
     // Called when the node enters the scene tree for the first time.
@@ -68,6 +113,7 @@ public partial class game : Node2D
 		_TileMap = this.GetNode<TileMap>(new NodePath("TileMap"));
 		_winScreen = this.GetNode<ColorRect>("UiLayer/Win");
 		BuildLevel();
+		
         //CallDeferred(nameof(UpdateVisuals));
         //UpdateVisuals();
     }
@@ -133,8 +179,29 @@ public partial class game : Node2D
 		switch(tileType)
 		{
 			case TileType.Floor:
-				PlayerTile = new Vector2(x, y); break;
-			case TileType.Door:
+
+				var blocked = false;
+
+				foreach(var enemy in Enemies)
+				{
+					if((int)enemy.TilePosition.X == x && (int)enemy.TilePosition.Y == y)
+					{
+						enemy.TakeDamage(1, this);
+						if (enemy.IsDead)
+						{
+							enemy.Remove();
+							Enemies.Remove(enemy);
+						}
+						blocked = true; 
+						break;
+					}
+				}
+				if (!blocked)
+				{
+					PlayerTile = new Vector2(x, y);
+				}
+                break;
+            case TileType.Door:
 				SetTile(x, y, TileType.Floor); break;
 			case TileType.Stairs:
 				current_level_number++;
@@ -162,6 +229,11 @@ public partial class game : Node2D
 		Map.Clear();
 		_TileMap.Clear();
 		VisibilityMap.Clear();
+
+		foreach(var enemy in Enemies)
+		{
+			enemy.Remove();
+		}
 
 		LevelSize = LEVEL_SIZES[current_level_number];
 
@@ -197,8 +269,33 @@ public partial class game : Node2D
 		var playerY = startRoom.Position.Y + 1 + random.Next() % ((int)(startRoom.Size.Y - 2));
 		PlayerTile = new Vector2(playerX, playerY);
 
-        //place ladder
-        var endRoom = Rooms.Last();
+		//place enemies
+		var numberOfEnemies = LEVEL_ENEMIES_COUNT[current_level_number];
+		for (int i = 0;i < numberOfEnemies;i++)
+		{
+			var room = Rooms[1 + random.Next() % (Rooms.Count - 1)];
+			var x = room.Position.X + 1 + random.Next() % ((int)(room.Size.X - 2));
+			var y = room.Position.Y + 1 + random.Next() % ((int)(room.Size.Y - 2));
+
+			var blocked = false;
+			foreach(var enemy in Enemies)
+			{
+				if((int)enemy.TilePosition.X == x && (int)enemy.TilePosition.Y == y)
+				{
+					blocked = true; break;
+				}
+			}
+
+			if (!blocked)
+			{
+				var enemy = new Enemy(this, random.Next() % 2, x, y);
+				Enemies.Add(enemy);
+			}
+		}
+
+
+		//place ladder
+		var endRoom = Rooms.Last();
         var ladderX = endRoom.Position.X + 1 + random.Next() % ((int)(endRoom.Size.X - 2));
         var ladderY = endRoom.Position.Y + 1 + random.Next() % ((int)(endRoom.Size.Y - 2));
 		SetTile((int)ladderX, (int)ladderY, TileType.Stairs);
@@ -239,6 +336,8 @@ public partial class game : Node2D
 					}
 				}
 			}
+
+			ScoreLabel.Text = $"Score: {Score}";
 		}
 		catch (Exception ex)
 		{

@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://c50b2v36extd3"]
+
+[ext_resource type="Texture2D" uid="uid://d8nuomwtfg5a" path="res://enemy.png" id="1_c1hao"]
+
+[node name="Enemy" type="Sprite2D"]
+position = Vector2(288, 160)
+texture = ExtResource("1_c1hao")
+centered = false
+
+[node name="HealthBar" type="ColorRect" parent="."]
+offset_right = 32.0
+offset_bottom = 2.0
+color = Color(1, 0, 0, 1)
