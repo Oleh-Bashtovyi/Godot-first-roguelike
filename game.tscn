@@ -23,7 +23,6 @@ script = ExtResource("1_4al0r")
 [node name="TileMap" type="TileMap" parent="."]
 tile_set = ExtResource("2_ilgdk")
 rendering_quadrant_size = 32
-collision_visibility_mode = 1
 format = 2
 layer_0/name = "Main layer(0)"
 
@@ -63,6 +62,24 @@ offset_left = 176.0
 offset_right = 261.0
 offset_bottom = 35.0
 text = "Health:"
+vertical_alignment = 1
+
+[node name="Healing" type="Label" parent="UiLayer"]
+visible = false
+offset_left = 106.0
+offset_top = 320.0
+offset_right = 191.0
+offset_bottom = 355.0
+text = "Healing:"
+vertical_alignment = 1
+
+[node name="Poisoned" type="Label" parent="UiLayer"]
+visible = false
+offset_left = 480.0
+offset_top = 320.0
+offset_right = 605.0
+offset_bottom = 355.0
+text = "Poisoned:"
 vertical_alignment = 1
 
 [node name="Score" type="Label" parent="UiLayer"]

@@ -34,6 +34,7 @@ public partial class game : Node2D
 	};
 	public int[] LEVEL_ROOMS_COUNT = { 9, 13, 14, 16, 18 }; 
 	public int[] LEVEL_ENEMIES_COUNT = { 5, 8, 12, 18, 24 }; 
+	public int[] LEVEL_ITEMS_COUNT = { 9, 6, 8, 10, 12 }; 
 
 	//==============================================================
 	//CURRENT LEVEL
@@ -44,6 +45,7 @@ public partial class game : Node2D
 	public List<Rect2> Rooms = new();
 	public List<List<TileType>> Map = new();
 	public List<Enemy> Enemies = new();
+	public List<Item> Items = new();
 
     //==============================================================
     //GAME STATE
@@ -51,6 +53,8 @@ public partial class game : Node2D
 	public Vector2 PlayerTile = new();
 	public int Score = 0;
 	public int PlayerHealth = PLAYER_START_HP;
+	public int HealingTurns = 0;
+	public int PoisonTurns = 0;
 
 	//==============================================================
 	//INTERNAL
@@ -62,12 +66,53 @@ public partial class game : Node2D
 	private Label _healthLabel;
 	private ColorRect _winScreen;
 	private ColorRect _loseScreen;
+	private Label _healingLabel;
+	private Label _poisonLabel;
+
+
+
 	private AStar2D enemyPathFinding;
 	private int TileLayer = 0;
     public PackedScene EnemyScene = ResourceLoader.Load<PackedScene>("res://Enemy.tscn");
+    public PackedScene PotionScene = ResourceLoader.Load<PackedScene>("res://Potion.tscn");
+	public List<string> POTION_FUNCTIONS = new() { "PoisonHero", "HealOverTimeHero" };
+
+
     protected TileMap VisibilityMap => _visibilityMap ??= this.GetNode<TileMap>(new NodePath("VisibilityMap"));
 	protected Label ScoreLabel => _scoreLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Score"));
 	protected Label HealthLabel => _healthLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Health"));
+	protected Label HealingLabel => _healingLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Healing"));
+	protected Label PoisoningLabel => _poisonLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Poisoned"));
+
+
+	public class Item
+	{
+        public Sprite2D scene { get; set; }
+        public Vector2 TilePosition { get; set; }
+
+		public int ItemType {  get; set; }
+		public Item(game game, int type, float x, float y) 
+		{ 
+			scene = game.PotionScene.Instantiate<Sprite2D>();
+			scene.Texture = type == 0 ?
+					GD.Load<Texture2D>("res://potion2.png") :
+					GD.Load<Texture2D>("res://Potion1.png");
+			scene.Visible = false;
+			ItemType = type;
+			TilePosition = new Vector2(x, y);
+            scene.Position = TilePosition * TILE_SIZE;
+            Random random = new Random();
+			scene.Offset = new Vector2(random.Next() % 12 - 6, random.Next() % 12 - 6);
+			game.AddChild(scene);
+		}	
+
+		public void Remove()
+		{
+            scene.QueueFree();
+        }
+    }
+
+
 
 
 	public class Enemy
@@ -100,7 +145,17 @@ public partial class game : Node2D
 			var rect = scene.GetNode<ColorRect>("HealthBar");
 			rect.SetSize(new Vector2(TILE_SIZE * ((float)Hp / FullHp), rect.Size.Y));
 
-			game.Score += 10 * FullHp;
+			if(Hp <= 0)
+			{
+				game.Score += 10 * FullHp;
+
+				var rand = new Random();
+
+				if((rand.Next() & 1) == 0)
+				{
+					game.Items.Add(new Item(game, rand.Next() % 2, TilePosition.X, TilePosition.Y));
+				}
+			}
 		}
 
 
@@ -185,6 +240,9 @@ public partial class game : Node2D
 		if (!@event.IsPressed())
 			return;
 
+		if (PlayerHealth <= 0)
+			return;
+
 		if (@event.IsAction("Left") )
 		{
 			TryMove(-1, 0);
@@ -216,13 +274,33 @@ public partial class game : Node2D
 	}
 
 
+
+	public void PoisonHero()
+	{
+		PoisonTurns += 3;
+		PoisoningLabel.Visible = true;
+	}
+
+
+    public void HealOverTimeHero()
+	{
+		HealingTurns += 3;
+		HealingLabel.Visible = true;
+	}
+
+
+
     private void _on_restart_pressed()
 	{
         _winScreen.Visible = false;
         _loseScreen.Visible = false;
+		HealingLabel.Visible = false;
+		PoisoningLabel.Visible = false;	
 		PlayerHealth = PLAYER_START_HP;
 		current_level_number = 0;
 		Score = 0;
+		HealingTurns = 0;
+		PoisonTurns = 0;
 		BuildLevel();
         CallDeferred(nameof(UpdateVisuals));
     }
@@ -262,6 +340,7 @@ public partial class game : Node2D
 				if (!blocked)
 				{
 					PlayerTile = new Vector2(x, y);
+					PickUpItems();
 				}
                 break;
             case TileType.Door:
@@ -286,8 +365,54 @@ public partial class game : Node2D
 			enemy.Act(this);
 		}
 
+		if(HealingTurns > 0)
+		{
+			HealingTurns--;
+			PlayerHealth++;
+
+			if(HealingTurns <= 0)
+			{
+				HealingLabel.Visible = false;
+			}
+		}
+		if(PoisonTurns > 0)
+		{
+			PoisonTurns--;
+			DoDamageToPlayer(1);
+
+			if(PoisonTurns <= 0)
+			{
+				PoisoningLabel.Visible = false;
+			}
+		}
+
+
         CallDeferred(nameof(UpdateVisuals));
 		
+    }
+
+
+
+	public void PickUpItems()
+	{
+		var removeQueue = new List<Item>();
+
+		foreach(var item in Items)
+		{
+			if(item.TilePosition == PlayerTile)
+			{
+                Call(POTION_FUNCTIONS[item.ItemType]);
+				removeQueue.Add(item);
+            }
+
+			
+		}
+
+        foreach (var item in removeQueue)
+        {
+			item.Remove();
+			Items.Remove(item);
+        }
     }
 
 
@@ -301,9 +426,14 @@ public partial class game : Node2D
 
 		foreach(var enemy in Enemies)
             enemy.Remove();
+		foreach(var item in Items)
+			item.Remove();
+
+		Items.Clear();
 		Enemies.Clear();
 
 		enemyPathFinding = new AStar2D();
+
 
         LevelSize = LEVEL_SIZES[current_level_number];
 
@@ -362,6 +492,17 @@ public partial class game : Node2D
 				Enemies.Add(enemy);
 			}
 		}
+
+		//place potions
+		var itemNums = LEVEL_ITEMS_COUNT[current_level_number];
+		for (int i = 0; i < itemNums; i++)
+		{
+			var room = Rooms[random.Next() % Rooms.Count];
+            var x = room.Position.X + 1 + random.Next() % ((int)(room.Size.X - 2));
+            var y = room.Position.Y + 1 + random.Next() % ((int)(room.Size.Y - 2));
+			Items.Add(new Item(this, random.Next() % 2, x, y));
+        }
+
 
 
 		//place ladder
@@ -460,8 +601,21 @@ public partial class game : Node2D
 					}
 				}
 			}
+            foreach (var item in Items)
+            {
+                item.scene.Position = item.TilePosition * TILE_SIZE;
+                if (!item.scene.Visible)
+                {
+                    var itemCenter = TileToPixelCenter(item.TilePosition.X, item.TilePosition.Y);
+                    var occlusion = spaceState.IntersectRay(PhysicsRayQueryParameters2D.Create(playerCenter, itemCenter));
+                    if (occlusion.Count == 0)
+                    {
+                        item.scene.Visible = true;
+                    }
+                }
+            }
 
-			HealthLabel.Text = $"Health: {PlayerHealth}";
+            HealthLabel.Text = $"Health: {PlayerHealth}";
 			ScoreLabel.Text = $"Score: {Score}";
 		}
 		catch (Exception ex)

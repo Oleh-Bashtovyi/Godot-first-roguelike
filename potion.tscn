@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://b77l0e83wwdmy"]
+
+[ext_resource type="Texture2D" uid="uid://cf652j7xwg0ep" path="res://potion1.png" id="1_eh5u0"]
+
+[node name="RedPotion" type="Sprite2D"]
+visible = false
+position = Vector2(128, 160)
+texture = ExtResource("1_eh5u0")
+centered = false
