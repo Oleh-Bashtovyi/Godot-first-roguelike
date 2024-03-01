@@ -97,4 +97,31 @@ offset_right = 416.0
 offset_bottom = 221.0
 text = "Restart"
 
+[node name="Lose" type="ColorRect" parent="UiLayer"]
+visible = false
+offset_top = 35.0
+offset_right = 640.0
+offset_bottom = 352.0
+color = Color(0, 0, 0, 0.564706)
+
+[node name="Label" type="Label" parent="UiLayer/Lose"]
+layout_mode = 0
+offset_left = 288.0
+offset_top = 125.0
+offset_right = 354.0
+offset_bottom = 148.0
+theme_override_colors/font_color = Color(0.992157, 0, 0, 1)
+text = "You lose!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Restart" type="Button" parent="UiLayer/Lose"]
+layout_mode = 0
+offset_left = 256.0
+offset_top = 157.0
+offset_right = 416.0
+offset_bottom = 221.0
+text = "Restart"
+
 [connection signal="pressed" from="UiLayer/Win/Restart" to="." method="_on_restart_pressed"]
+[connection signal="pressed" from="UiLayer/Lose/Restart" to="." method="_on_restart_pressed"]

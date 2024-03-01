@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml;
 
 public partial class game : Node2D
 {
@@ -19,13 +20,14 @@ public partial class game : Node2D
     //CONSTANTS
     //==============================================================
     public const int TILE_SIZE = 32;
+    public const int PLAYER_START_HP = 5;
 	public const int MIN_ROOM_DIMENSION = 5;
 	public const int MAX_ROOM_DIMENSION = 8;
 
 	public Vector2[] LEVEL_SIZES = 
 	{
-		new (20 , 20),
 		new (25 , 25),
+		new (30 , 30),
 		new (30 , 30),
 		new (35 , 35),
 		new (40 , 40),
@@ -48,6 +50,7 @@ public partial class game : Node2D
     //==============================================================
 	public Vector2 PlayerTile = new();
 	public int Score = 0;
+	public int PlayerHealth = PLAYER_START_HP;
 
 	//==============================================================
 	//INTERNAL
@@ -56,11 +59,15 @@ public partial class game : Node2D
 	private TileMap _TileMap;
 	private TileMap _visibilityMap;
 	private Label _scoreLabel;
+	private Label _healthLabel;
 	private ColorRect _winScreen;
+	private ColorRect _loseScreen;
+	private AStar2D enemyPathFinding;
 	private int TileLayer = 0;
     public PackedScene EnemyScene = ResourceLoader.Load<PackedScene>("res://Enemy.tscn");
     protected TileMap VisibilityMap => _visibilityMap ??= this.GetNode<TileMap>(new NodePath("VisibilityMap"));
 	protected Label ScoreLabel => _scoreLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Score"));
+	protected Label HealthLabel => _healthLabel ??= this.GetNode<Label>(new NodePath("UiLayer/Health"));
 
 
 	public class Enemy
@@ -78,7 +85,10 @@ public partial class game : Node2D
 			Hp = FullHp;
 			TilePosition = new Vector2(x, y);
 			scene = game.EnemyScene.Instantiate<Sprite2D>();
-			scene.Position = TilePosition * TILE_SIZE;
+			scene.Visible = false;
+			scene.Texture = level == 0 ? GD.Load<Texture2D>("res://enemy.png") : GD.Load<Texture2D>("res://enemy_2.png");
+
+            scene.Position = TilePosition * TILE_SIZE;
 			game.AddChild(scene);
 		}
 
@@ -91,6 +101,45 @@ public partial class game : Node2D
 			rect.SetSize(new Vector2(TILE_SIZE * ((float)Hp / FullHp), rect.Size.Y));
 
 			game.Score += 10 * FullHp;
+		}
+
+
+
+		public void Act(game game)
+		{
+			if(!scene.Visible) return;
+
+			var myPoint = game.enemyPathFinding.GetClosestPoint(new Vector2(TilePosition.X, TilePosition.Y));
+			var playerPoint = game.enemyPathFinding.GetClosestPoint(new Vector2(game.PlayerTile.X, game.PlayerTile.Y));
+			var path = game.enemyPathFinding.GetPointPath(myPoint, playerPoint);
+
+			if(path != null && path.Length >= 1)
+			{
+				var moveTile = new Vector2(path[1].X, path[1].Y);
+
+				if(moveTile == game.PlayerTile)
+				{
+					game.DoDamageToPlayer(1); 
+				}
+				else
+				{
+					var blocked = false;
+
+					foreach(var enemy in game.Enemies)
+					{
+						if(enemy.TilePosition == moveTile)
+						{
+							blocked = true;
+							break;
+						}
+					}
+					if (!blocked)
+					{
+						TilePosition = moveTile;
+					}
+				}
+			}
+
 		}
 
 
@@ -112,6 +161,7 @@ public partial class game : Node2D
 		_player = this.GetNode<Sprite2D>(new NodePath("Player"));
 		_TileMap = this.GetNode<TileMap>(new NodePath("TileMap"));
 		_winScreen = this.GetNode<ColorRect>("UiLayer/Win");
+		_loseScreen = this.GetNode<ColorRect>("UiLayer/Lose");
 		BuildLevel();
 		
         //CallDeferred(nameof(UpdateVisuals));
@@ -153,11 +203,24 @@ public partial class game : Node2D
         }
     }
 
-	
 
-	private void _on_restart_pressed()
+
+    public void DoDamageToPlayer(int amout)
+	{
+		PlayerHealth = Math.Max(0, PlayerHealth - amout);
+
+		if(PlayerHealth <= 0)
+		{
+			_loseScreen.Visible = true;
+		}
+	}
+
+
+    private void _on_restart_pressed()
 	{
         _winScreen.Visible = false;
+        _loseScreen.Visible = false;
+		PlayerHealth = PLAYER_START_HP;
 		current_level_number = 0;
 		Score = 0;
 		BuildLevel();
@@ -217,6 +280,12 @@ public partial class game : Node2D
 				}
 				break;
 		}
+
+		foreach(var enemy in Enemies)
+		{
+			enemy.Act(this);
+		}
+
         CallDeferred(nameof(UpdateVisuals));
 		
     }
@@ -231,11 +300,12 @@ public partial class game : Node2D
 		VisibilityMap.Clear();
 
 		foreach(var enemy in Enemies)
-		{
-			enemy.Remove();
-		}
+            enemy.Remove();
+		Enemies.Clear();
 
-		LevelSize = LEVEL_SIZES[current_level_number];
+		enemyPathFinding = new AStar2D();
+
+        LevelSize = LEVEL_SIZES[current_level_number];
 
 		for (int x = 0; x < LevelSize.X; x++)
 		{
@@ -304,6 +374,46 @@ public partial class game : Node2D
 
     }
 
+
+	private void ClearPath(Vector2 tile)
+	{
+		var newPoint = enemyPathFinding.GetAvailablePointId();
+		enemyPathFinding.AddPoint(newPoint, new Vector2(tile.X, tile.Y), 0);
+
+		var pointsToConnect = new List<long>();
+		var tileX = (int) tile.X;
+		var tileY = (int) tile.Y;
+
+
+		if(tileX > 0 && Map[tileX - 1][tileY] == TileType.Floor) 
+		{
+			pointsToConnect.Add(enemyPathFinding.GetClosestPoint(new Vector2(tileX - 1, tileY)) );
+		}
+        if (tileY > 0 && Map[tileX][tileY - 1] == TileType.Floor)
+        {
+            pointsToConnect.Add(enemyPathFinding.GetClosestPoint(new Vector2(tileX, tileY - 1)));
+        }
+        if (tileX < LevelSize.X - 1 && Map[tileX + 1][tileY] == TileType.Floor)
+        {
+            pointsToConnect.Add(enemyPathFinding.GetClosestPoint(new Vector2(tileX + 1, tileY)));
+        }
+        if (tileY < LevelSize.Y - 1 && Map[tileX][tileY + 1] == TileType.Floor)
+        {
+            pointsToConnect.Add(enemyPathFinding.GetClosestPoint(new Vector2(tileX, tileY + 1)));
+        }
+
+		foreach(var point in pointsToConnect)
+		{
+			enemyPathFinding.ConnectPoints(point, newPoint);
+		}
+    }
+
+
+
+
+
+
+
 	private void UpdateVisuals()
 	{
 		_player.Position = PlayerTile * TILE_SIZE;
@@ -337,6 +447,21 @@ public partial class game : Node2D
 				}
 			}
 
+			foreach(var enemy in Enemies)
+			{
+				enemy.scene.Position = enemy.TilePosition * TILE_SIZE;
+				if(!enemy.scene.Visible)
+				{
+					var enemyCenter = TileToPixelCenter(enemy.TilePosition.X, enemy.TilePosition.Y);
+					var occlusion = spaceState.IntersectRay(PhysicsRayQueryParameters2D.Create(playerCenter, enemyCenter));
+					if(occlusion.Count == 0)
+					{
+						enemy.scene.Visible = true;
+					}
+				}
+			}
+
+			HealthLabel.Text = $"Health: {PlayerHealth}";
 			ScoreLabel.Text = $"Score: {Score}";
 		}
 		catch (Exception ex)
@@ -632,5 +757,10 @@ public partial class game : Node2D
 	{
 		Map[x][y] = tileType;
         _TileMap.SetCell(TileLayer, new Vector2I(x, y), (int)tileType, new Vector2I(0, 0));
+
+		if (tileType == TileType.Floor)
+		{
+			ClearPath(new Vector2(x, y));
+		}
     }
 }
